@@ -2,8 +2,8 @@
 1 RT_MANIFEST "pacu.manifest"
 1 ICON "pacu.ico"
 1 VERSIONINFO
-FILEVERSION 0,3,0,0
-PRODUCTVERSION 0,3,0,0
+FILEVERSION @VC@,0
+PRODUCTVERSION @VC@,0
 BEGIN
   BLOCK "StringFileInfo"
   BEGIN
@@ -11,8 +11,8 @@ BEGIN
     BEGIN
       VALUE "FileDescription", "Pacu - booster gaming"
       VALUE "ProductName", "Pacu"
-      VALUE "FileVersion", "0.3.0"
-      VALUE "ProductVersion", "0.3.0"
+      VALUE "FileVersion", "@V@"
+      VALUE "ProductVersion", "@V@"
     END
   END
   BLOCK "VarFileInfo"

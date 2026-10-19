@@ -49,6 +49,9 @@ fn main() {
     }
 
     pacu::update::cleanup_old();
+    pacu::update::sync_install_record();
+    // Tugas jalan-saat-login diarahkan ke exe ini, misalnya setelah pindah dari versi portable.
+    pacu::autostart::refresh();
     if !cfg.wake.blocked.is_empty() {
         let blocked = cfg.wake.blocked.clone();
         std::thread::spawn(move || pacu::wake::enforce(&blocked));

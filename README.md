@@ -1,10 +1,19 @@
 # Pacu — booster gaming yang ringan untuk Windows
 
-Pacu adalah aplikasi seperti Process Lasso yang difokuskan untuk gaming, sekarang digabung dengan **Pacu Volt** (undervolt GPU NVIDIA dan AMD otomatis) dan **monitor + overlay** seperti RivaTuner (FPS, suhu, clock CPU/GPU di dalam game). Hanya satu file `Pacu.exe` (±6 MB), tanpa installer, tanpa runtime tambahan, dan tanpa service terpisah.
+Pacu adalah aplikasi seperti Process Lasso yang difokuskan untuk gaming, sekarang digabung dengan **Pacu Volt** (undervolt GPU NVIDIA dan AMD otomatis) dan **monitor + overlay** seperti RivaTuner (FPS, suhu, clock CPU/GPU di dalam game). Tersedia sebagai installer `Pacu-Setup.exe` atau satu file portable `Pacu.exe` (±7 MB), tanpa runtime tambahan dan tanpa service terpisah.
+
+## Instalasi
+Unduh dari [GitHub Releases](https://github.com/Leader9697/pacu/releases/latest):
+- **`Pacu-Setup.exe` (disarankan)**: memasang Pacu ke `C:\Program Files\Pacu`, membuat shortcut di Start Menu dan desktop (bisa dimatikan), dan mendaftarkan Pacu di **Settings → Apps** supaya bisa di-uninstall seperti aplikasi lain. Installer menutup Pacu yang sedang berjalan, jadi bisa dipakai juga untuk memasang versi baru di atas yang lama. `Pacu-Setup.exe /S` memasang tanpa jendela.
+- **`Pacu.exe` (portable)**: langsung jalan dari folder mana pun tanpa dipasang.
+
+Uninstall menutup Pacu, menghapus tugas Task Scheduler milik Pacu (jalan saat login dan undervolt saat login), lalu bertanya apakah pengaturan di `%APPDATA%\Pacu` dan `%APPDATA%\PacuVolt` ikut dihapus (bawaannya disimpan). Tweak Windows yang sudah diterapkan tidak dikembalikan otomatis; kembalikan dulu dari dalam Pacu bila perlu.
+
+Pindah dari portable ke installer: tutup Pacu portable, jalankan installer, lalu buka Pacu dari Start Menu. Pengaturan terbawa karena disimpan di `%APPDATA%`, dan tugas jalan-saat-login otomatis diarahkan ke salinan yang terpasang.
 
 ## Cara pakai
 
-1. Jalankan `Pacu.exe`. Windows akan meminta izin admin, karena mengatur prioritas proses lain butuh hak admin.
+1. Buka Pacu dari Start Menu (atau jalankan `Pacu.exe` versi portable). Windows akan meminta izin admin, karena mengatur prioritas proses lain butuh hak admin.
 2. Main game seperti biasa. Mode Game menyala sendiri saat game terdeteksi lalu mati saat game ditutup.
 3. Supaya ikut menyala saat Windows hidup: **Pengaturan → Jalankan saat Windows menyala**. Pacu memakai Task Scheduler sehingga tidak ada prompt UAC tiap kali login.
 4. Tombol tutup (X) menyembunyikan Pacu ke system tray. Klik dua kali ikon tray untuk membukanya lagi. Pilih **Keluar** dari menu tray untuk benar-benar menutup.
@@ -20,7 +29,7 @@ Semua perubahan Mode Game bersifat sementara: saat game ditutup atau Pacu keluar
 Mengikuti sistem desain Fluent Windows 11 (seperti aplikasi Settings dan Task Manager): font Segoe UI dari Windows, ikon Fluent System Icons, warna aksen mengikuti Personalisasi Windows, menu samping berkelompok, kartu pengaturan dengan sakelar Aktif/Nonaktif. Halaman Monitor memakai tabel sensor ala HWiNFO (Sekarang, Minimum, Maksimum, Rata-rata sejak Pacu dibuka, bisa direset).
 
 ## Pembaruan
-Pacu memeriksa rilis baru di [GitHub Releases](https://github.com/Leader9697/pacu/releases) saat menyala dan tiap 6 jam (bisa dimatikan di Pengaturan). Unduhan lewat HTTPS dicocokkan dengan SHA-256 dari rilis, lalu exe lama diganti setelah kamu menekan "Mulai ulang". Rilis dibuat otomatis oleh GitHub Actions setiap version di `Cargo.toml` dinaikkan dan di-push ke `main`.
+Pacu memeriksa rilis baru di [GitHub Releases](https://github.com/Leader9697/pacu/releases) saat menyala dan tiap 6 jam (bisa dimatikan di Pengaturan). Unduhan lewat HTTPS dicocokkan dengan SHA-256 dari rilis, lalu exe lama diganti setelah kamu menekan "Mulai ulang". Ini berlaku untuk versi portable maupun yang dipasang lewat installer; versi di Settings → Apps ikut diperbarui. Rilis dibuat otomatis oleh GitHub Actions setiap version di `Cargo.toml` dinaikkan dan di-push ke `main`.
 
 
 ### Mode Game
@@ -168,6 +177,8 @@ rustup target add x86_64-pc-windows-gnu
 sudo apt install gcc-mingw-w64-x86-64
 cargo build --release --target x86_64-pc-windows-gnu
 ```
+
+Installer dibuat dengan NSIS (`sudo apt install nsis`) dari `installer/pacu.nsi`; lihat langkah "Kemas" di `.github/workflows/release.yml`.
 
 Di Linux, `cargo run` menjalankan UI dengan data proses simulasi. `cargo test` menguji logika penyeimbang dan pencocokan pola.
 

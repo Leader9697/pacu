@@ -32,3 +32,10 @@ pub fn set(enabled: bool) -> bool {
         schtasks(&["/Delete", "/F", "/TN", TASK])
     }
 }
+
+/// Bila tugas sudah ada, arahkan ulang ke exe ini (berguna setelah pindah ke versi installer).
+pub fn refresh() {
+    if is_enabled() {
+        set(true);
+    }
+}

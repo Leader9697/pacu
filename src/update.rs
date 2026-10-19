@@ -6,6 +6,10 @@
 //! lama dipindah ke `Pacu.exe.old`, exe baru ditulis di namanya, lalu Pacu ditutup dan versi baru
 //! dibuka dengan `--wait-pid` supaya ia menunggu proses lama benar-benar keluar. `.old` dihapus
 //! saat versi baru menyala.
+//!
+//! Versi yang dipasang lewat installer (Program Files\Pacu) diperbarui dengan cara yang sama, karena
+//! Pacu selalu berjalan sebagai administrator. Setelahnya `sync_install_record` menyamakan versi
+//! yang tampil di Settings > Apps.
 
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
@@ -200,6 +204,34 @@ pub fn cleanup_old() {
     }
 }
 
+/// Kunci uninstall yang ditulis installer (installer/pacu.nsi).
+pub const UNINST_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Pacu";
+
+/// `exe` berada di folder yang dicatat installer sebagai `InstallLocation`.
+pub fn is_installed_copy(exe: &std::path::Path, install_location: &str) -> bool {
+    let exe = exe.to_string_lossy();
+    let Some(cut) = exe.rfind(['\\', '/']) else { return false };
+    let norm = |p: &str| p.trim().trim_end_matches(['\\', '/']).replace('/', "\\").to_lowercase();
+    !install_location.trim().is_empty() && norm(&exe[..cut]) == norm(install_location)
+}
+
+/// Dipanggil saat Pacu menyala: bila ini salinan yang dipasang installer dan sudah diperbarui dari
+/// dalam aplikasi, tulis versi baru ke Settings > Apps.
+pub fn sync_install_record() {
+    use crate::tweaks::{reg, Root, Saved};
+    let Ok(exe) = std::env::current_exe() else { return };
+    let Ok(Some(Saved::Str(loc))) = reg::read(Root::Hklm, UNINST_KEY, "InstallLocation") else { return };
+    if !is_installed_copy(&exe, &loc) {
+        return;
+    }
+    if let Ok(Some(Saved::Str(v))) = reg::read(Root::Hklm, UNINST_KEY, "DisplayVersion") {
+        if v == current_version() {
+            return;
+        }
+    }
+    let _ = reg::write(Root::Hklm, UNINST_KEY, "DisplayVersion", &Saved::Str(current_version().to_string()));
+}
+
 /// Diisi UI saat pengguna menekan "Mulai ulang"; dibaca `main` setelah semua thread berhenti.
 pub static RESTART: OnceLock<()> = OnceLock::new();
 
@@ -345,6 +377,15 @@ mod tests {
         assert!(r.exe_url.ends_with("/Pacu.exe"));
         assert!(r.sha_url.ends_with(".sha256"));
         assert!(parse_release(r#"{"tag_name":"v1","assets":[]}"#).is_err());
+    }
+
+    #[test]
+    fn installed_copy() {
+        let exe = std::path::Path::new(r"C:\Program Files\Pacu\Pacu.exe");
+        assert!(is_installed_copy(exe, r"C:\Program Files\Pacu"));
+        assert!(is_installed_copy(exe, r"c:\program files\pacu\"));
+        assert!(!is_installed_copy(exe, r"C:\Program Files\Pacu2"));
+        assert!(!is_installed_copy(exe, ""));
     }
 
     #[test]

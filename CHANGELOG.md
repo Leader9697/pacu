@@ -1,5 +1,11 @@
 # Catatan rilis
 
+## v0.6.0
+- Installer resmi **Pacu-Setup.exe**: memasang ke Program Files, membuat shortcut Start Menu dan desktop, dan mendaftarkan Pacu di Settings → Apps lengkap dengan uninstall. Uninstall juga menghapus tugas Task Scheduler milik Pacu dan menawarkan untuk menghapus pengaturan. `Pacu.exe` portable tetap tersedia.
+- Pembaruan otomatis juga bekerja untuk Pacu yang dipasang lewat installer, dan versi di Settings → Apps ikut diperbarui.
+- Tugas "Jalankan saat Windows menyala" otomatis diarahkan ke lokasi Pacu yang sedang dipakai (misalnya setelah pindah dari portable ke installer).
+- Properti file Pacu.exe kini menampilkan versi yang benar.
+
 ## v0.5.0
 - Optimasi Windows punya bagian baru **Ekstrem** dengan 9 tweak yang idenya diadaptasi dari AtlasOS: prioritas CPU untuk jendela aktif, fullscreen eksklusif asli tanpa Game Bar, kernel dikunci di RAM, Fault Tolerant Heap mati, NTFS lebih ringan, animasi mati, startup tanpa jeda, shutdown cepat, dan Fast Startup mati. Ada "Terapkan semua" sendiri dan setiap tweak bisa dikembalikan.
 - Bagian Berisiko: tombol baru untuk mematikan mitigasi Spectre dan Meltdown.

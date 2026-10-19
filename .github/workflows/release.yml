@@ -1,11 +1,12 @@
 name: Rilis
 
-# Setiap push ke main yang menaikkan version di Cargo.toml membangun dan merilis Pacu.exe dengan
+# Setiap push ke main yang menaikkan version di Cargo.toml membangun dan merilis Pacu.exe (portable)
+# dan Pacu-Setup.exe (installer) dengan
 # tag "vX.Y.Z". Versi yang sudah punya rilis dilewati. Bisa juga dijalankan manual.
 on:
   push:
     branches: [main]
-    paths: ["Cargo.toml", ".github/workflows/release.yml"]
+    paths: ["Cargo.toml", ".github/workflows/release.yml", "installer/**"]
   workflow_dispatch:
 
 permissions:
@@ -33,7 +34,7 @@ jobs:
         if: steps.ver.outputs.skip != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64 zip
+          sudo apt-get install -y gcc-mingw-w64-x86-64 zip nsis
           rustup target add x86_64-pc-windows-gnu
 
       - uses: Swatinem/rust-cache@v2
@@ -58,11 +59,17 @@ jobs:
           cp README.md CHANGELOG.md res/PresentMon-LICENSE.txt res/pawnio/LICENSE-PawnIO.Modules.txt res/fonts/FluentSystemIcons-LICENSE.txt dist/Pacu/
           (cd dist && sha256sum Pacu.exe > Pacu.exe.sha256 && zip -qr Pacu.zip Pacu)
           awk -v v="## $TAG" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > dist/notes.md
-          cat dist/Pacu.exe.sha256
+          # Installer: bahan yang sama ditambah ikon yang dibuat build.rs.
+          mkdir -p dist/setup
+          cp dist/Pacu/* dist/setup/
+          cp "$(find target/x86_64-pc-windows-gnu/release/build -name pacu.ico | head -1)" dist/setup/
+          makensis -V2 -DVERSION="${TAG#v}" -DSRC="$PWD/dist/setup" -DOUT="$PWD/dist/Pacu-Setup.exe" installer/pacu.nsi
+          (cd dist && sha256sum Pacu-Setup.exe > Pacu-Setup.exe.sha256)
+          cat dist/Pacu.exe.sha256 dist/Pacu-Setup.exe.sha256
 
       - name: Terbitkan rilis
         if: steps.ver.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ver.outputs.tag }}
-        run: gh release create "$TAG" --target "$GITHUB_SHA" dist/Pacu.exe dist/Pacu.exe.sha256 dist/Pacu.zip --title "Pacu $TAG" --notes-file dist/notes.md
+        run: gh release create "$TAG" --target "$GITHUB_SHA" dist/Pacu-Setup.exe dist/Pacu-Setup.exe.sha256 dist/Pacu.exe dist/Pacu.exe.sha256 dist/Pacu.zip --title "Pacu $TAG" --notes-file dist/notes.md

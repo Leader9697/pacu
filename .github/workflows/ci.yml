@@ -13,8 +13,15 @@ jobs:
       - name: Pasang toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64
+          sudo apt-get install -y gcc-mingw-w64-x86-64 nsis
           rustup target add x86_64-pc-windows-gnu
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --lib
       - run: cargo build --release --target x86_64-pc-windows-gnu
+      - name: Uji installer
+        run: |
+          mkdir -p setup
+          cp target/x86_64-pc-windows-gnu/release/pacu.exe setup/Pacu.exe
+          cp README.md CHANGELOG.md res/PresentMon-LICENSE.txt res/pawnio/LICENSE-PawnIO.Modules.txt res/fonts/FluentSystemIcons-LICENSE.txt setup/
+          cp "$(find target/x86_64-pc-windows-gnu/release/build -name pacu.ico | head -1)" setup/
+          makensis -V2 -DVERSION="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)" -DSRC="$PWD/setup" -DOUT="$PWD/Pacu-Setup.exe" installer/pacu.nsi
