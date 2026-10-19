@@ -1066,6 +1066,11 @@ impl PacuApp {
         self.tweak_header(ui, "Game", tweaks::Group::Game);
         self.tweak_cards(ui, tweaks::Group::Game);
         ui.add_space(18.0);
+        self.tweak_header(ui, "Ekstrem", tweaks::Group::Extreme);
+        ui.label(muted("Diadaptasi dari AtlasOS. Lebih agresif, tetapi tidak mengurangi keamanan."));
+        ui.add_space(4.0);
+        self.tweak_cards(ui, tweaks::Group::Extreme);
+        ui.add_space(18.0);
         ui.horizontal(|ui| {
             ui.label(theme::icon_text(theme::icon::SHIELD, 16.0).color(RED));
             ui.label(section("Berisiko: mengurangi keamanan"));
@@ -1074,7 +1079,7 @@ impl PacuApp {
         ui.add_space(4.0);
         self.tweak_cards(ui, tweaks::Group::Risky);
         ui.add_space(4.0);
-        ui.label(muted("Defender, Firewall, dan mitigasi CPU tidak disentuh Pacu."));
+        ui.label(muted("Defender dan Firewall tidak disentuh Pacu."));
     }
 
     /// Judul halaman dengan tombol "Cek ulang" dan "Terapkan semua" untuk satu kelompok tweak.
@@ -1105,7 +1110,7 @@ impl PacuApp {
     }
 
     fn tweak_cards(&mut self, ui: &mut egui::Ui, group: tweaks::Group) {
-        if self.reboot_needed && group != tweaks::Group::Risky {
+        if self.reboot_needed && matches!(group, tweaks::Group::Game | tweaks::Group::Ram) {
             banner(ui, AMBER, "Restart diperlukan", "Restart PC supaya semua perubahan berlaku.");
             ui.add_space(6.0);
         }

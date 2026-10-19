@@ -200,6 +200,16 @@ const PERFORMANCE_SETTINGS: &[(&str, &str, u32)] = &[
     ("2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", 0),
     // Disk tidak pernah dimatikan.
     ("0012ee47-9041-4b5d-9b77-535fba8b1442", "6738e2c4-e8a5-4a42-b16a-e040e769756e", 0),
+    // Prosesor: CPU tidak boleh masuk throttle state, cek performa tiap 200 ms (lebih sedikit DPC).
+    ("54533251-82be-4824-96c1-47b60b740d00", "3b04d4fd-1cc7-4f23-ab1c-d1337819c4bb", 0),
+    ("54533251-82be-4824-96c1-47b60b740d00", "4d2b0152-7d5c-498b-88e2-34345392a2c5", 200),
+    // NVMe tidak pernah idle (timeout primer/sekunder 0, NOPPME mati). Ide dari AtlasOS.
+    ("0012ee47-9041-4b5d-9b77-535fba8b1442", "d639518a-e56d-4345-8af2-b9f32fb26109", 0),
+    ("0012ee47-9041-4b5d-9b77-535fba8b1442", "d3d55efd-c1ff-424e-9dc3-441be7833010", 0),
+    ("0012ee47-9041-4b5d-9b77-535fba8b1442", "fc7372b6-ab2d-43ee-8797-15e9841f2cca", 0),
+    // USB hub tidak di-suspend dan USB 3 link power management mati.
+    ("2a737441-1930-4402-8d77-b2bebba308a3", "0853a681-27c8-4100-a2fd-82013e970683", 0),
+    ("2a737441-1930-4402-8d77-b2bebba308a3", "d4e98f31-5ffe-4ce1-be31-1b38b384c009", 0),
     // Sleep dan hibernasi otomatis mati.
     ("238c9fa8-0aad-41ed-83f4-97be242c8f20", "29f6c1db-86da-48c5-9fdb-f2b67b1f44da", 0),
     ("238c9fa8-0aad-41ed-83f4-97be242c8f20", "9d7815a6-7ee4-497e-8888-515a05f02364", 0),

@@ -14,6 +14,7 @@ pub enum Root {
 pub enum Val {
     Dword(u32),
     Str(&'static str),
+    Bin(&'static [u8]),
 }
 
 pub struct RegItem {
@@ -29,6 +30,10 @@ const fn dw(root: Root, path: &'static str, name: &'static str, v: u32) -> RegIt
 
 const fn st(root: Root, path: &'static str, name: &'static str, v: &'static str) -> RegItem {
     RegItem { root, path, name, value: Val::Str(v) }
+}
+
+const fn bn(root: Root, path: &'static str, name: &'static str, v: &'static [u8]) -> RegItem {
+    RegItem { root, path, name, value: Val::Bin(v) }
 }
 
 pub enum Kind {
@@ -51,6 +56,8 @@ pub enum Group {
     Game,
     /// RAM Ekstrem.
     Ram,
+    /// Optimasi Windows, bagian ekstrem (diadaptasi dari AtlasOS). Ada "Terapkan semua" sendiri.
+    Extreme,
     /// Optimasi Windows, bagian berisiko (mengurangi keamanan). Tidak ikut "Terapkan semua".
     Risky,
 }
@@ -69,6 +76,10 @@ use Root::*;
 const MMCSS: &str = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile";
 const MMCSS_GAMES: &str = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games";
 const MOUSE: &str = "Control Panel\\Mouse";
+const DESKTOP: &str = "Control Panel\\Desktop";
+const MEMORY: &str = "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management";
+const GAMECFG: &str = "System\\GameConfigStore";
+const EXPLORER_ADV: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
 
 pub const TWEAKS: &[Tweak] = &[
     Tweak {
@@ -158,6 +169,106 @@ pub const TWEAKS: &[Tweak] = &[
         reboot: false,
         kind: Kind::NvidiaProfile(&["project8.exe"]),
     },
+    // Bagian ekstrem. Idenya diadaptasi dari playbook AtlasOS (github.com/atlas-os/atlas, GPL-3.0);
+    // kodenya ditulis ulang untuk Pacu, tidak disalin.
+    Tweak {
+        id: "x_foreground_boost",
+        group: Group::Extreme,
+        title: "Prioritaskan jendela aktif di penjadwal CPU",
+        desc: "Win32PrioritySeparation 0x26: jatah waktu CPU pendek dan dorongan besar untuk aplikasi di depan, jadi game mendapat CPU lebih dulu daripada aplikasi latar.",
+        reboot: false,
+        kind: Kind::Registry(&[dw(Hklm, "SYSTEM\\CurrentControlSet\\Control\\PriorityControl", "Win32PrioritySeparation", 0x26)]),
+    },
+    Tweak {
+        id: "x_fso_gamebar",
+        group: Group::Extreme,
+        title: "Fullscreen eksklusif asli, Game Bar mati total",
+        desc: "Fullscreen Optimizations dimatikan untuk game fullscreen eksklusif (input lag lebih rendah) dan Game Bar/perekaman diblokir lewat kebijakan. Overlay Game Bar (Win+G) tidak bisa dibuka.",
+        reboot: false,
+        kind: Kind::Registry(&[
+            dw(Hkcu, GAMECFG, "GameDVR_FSEBehaviorMode", 2),
+            dw(Hkcu, GAMECFG, "GameDVR_FSEBehavior", 2),
+            dw(Hkcu, GAMECFG, "GameDVR_HonorUserFSEBehaviorMode", 1),
+            dw(Hkcu, GAMECFG, "GameDVR_DXGIHonorFSEWindowsCompatible", 1),
+            dw(Hkcu, GAMECFG, "GameDVR_DSEBehavior", 2),
+            dw(Hkcu, GAMECFG, "GameDVR_EFSEFeatureFlags", 0),
+            dw(Hkcu, "Software\\Microsoft\\GameBar", "UseNexusForGameBarEnabled", 0),
+            dw(Hkcu, "Software\\Microsoft\\GameBar", "ShowStartupPanel", 0),
+            dw(Hklm, "SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR", "AllowGameDVR", 0),
+        ]),
+    },
+    Tweak {
+        id: "x_kernel_in_ram",
+        group: Group::Extreme,
+        title: "Kunci kernel di RAM, matikan penggabungan halaman",
+        desc: "Driver dan kernel tidak pernah dipindah ke pagefile (DisablePagingExecutive), dan Windows berhenti memindai RAM untuk menggabungkan halaman yang sama. Mengurangi stutter; pemakaian RAM sedikit naik.",
+        reboot: true,
+        kind: Kind::Registry(&[dw(Hklm, MEMORY, "DisablePagingExecutive", 1), dw(Hklm, MEMORY, "DisablePageCombining", 1)]),
+    },
+    Tweak {
+        id: "x_fth",
+        group: Group::Extreme,
+        title: "Matikan Fault Tolerant Heap",
+        desc: "Windows tidak lagi memasang tambalan memori yang memperlambat aplikasi yang pernah crash beberapa kali (sering menimpa game).",
+        reboot: true,
+        kind: Kind::Registry(&[dw(Hklm, "SOFTWARE\\Microsoft\\FTH", "Enabled", 0)]),
+    },
+    Tweak {
+        id: "x_ntfs",
+        group: Group::Extreme,
+        title: "NTFS lebih ringan",
+        desc: "Waktu akses terakhir tidak lagi ditulis setiap kali file dibaca, dan nama pendek 8.3 tidak dibuat untuk file baru. Mengurangi tulis disk saat game memuat ribuan file.",
+        reboot: true,
+        kind: Kind::Registry(&[
+            dw(Hklm, "SYSTEM\\CurrentControlSet\\Control\\FileSystem", "NtfsDisableLastAccessUpdate", 0x8000_0001),
+            dw(Hklm, "SYSTEM\\CurrentControlSet\\Control\\FileSystem", "NtfsDisable8dot3NameCreation", 1),
+        ]),
+    },
+    Tweak {
+        id: "x_visual_fx",
+        group: Group::Extreme,
+        title: "Matikan animasi dan efek visual",
+        desc: "Seperti \"Adjust for best performance\", tetapi font tetap halus dan isi jendela tetap tampil saat digeser. Animasi jendela, taskbar, menu, dan Aero Peek mati; menu muncul tanpa jeda. Berlaku penuh setelah keluar-masuk akun.",
+        reboot: true,
+        kind: Kind::Registry(&[
+            dw(Hkcu, "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects", "VisualFXSetting", 3),
+            bn(Hkcu, DESKTOP, "UserPreferencesMask", &[0x90, 0x12, 0x03, 0x80, 0x10, 0x00, 0x00, 0x00]),
+            st(Hkcu, DESKTOP, "MenuShowDelay", "0"),
+            st(Hkcu, DESKTOP, "FontSmoothing", "2"),
+            st(Hkcu, DESKTOP, "DragFullWindows", "1"),
+            st(Hkcu, "Control Panel\\Desktop\\WindowMetrics", "MinAnimate", "0"),
+            dw(Hkcu, EXPLORER_ADV, "TaskbarAnimations", 0),
+            dw(Hkcu, "Software\\Microsoft\\Windows\\DWM", "EnableAeroPeek", 0),
+        ]),
+    },
+    Tweak {
+        id: "x_startup_delay",
+        group: Group::Extreme,
+        title: "Hapus jeda aplikasi startup",
+        desc: "Windows biasanya menunggu beberapa detik sebelum menjalankan aplikasi startup (termasuk Pacu). Jeda itu dihapus.",
+        reboot: false,
+        kind: Kind::Registry(&[dw(Hkcu, "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize", "StartupDelayInMSec", 0)]),
+    },
+    Tweak {
+        id: "x_fast_shutdown",
+        group: Group::Extreme,
+        title: "Matikan PC lebih cepat",
+        desc: "Aplikasi dan layanan yang macet hanya ditunggu 2 detik saat shutdown atau restart (bawaan 5 sampai 20 detik).",
+        reboot: false,
+        kind: Kind::Registry(&[
+            st(Hkcu, DESKTOP, "HungAppTimeout", "2000"),
+            st(Hkcu, DESKTOP, "WaitToKillAppTimeOut", "2000"),
+            st(Hklm, "SYSTEM\\CurrentControlSet\\Control", "WaitToKillServiceTimeout", "2000"),
+        ]),
+    },
+    Tweak {
+        id: "x_fast_startup_off",
+        group: Group::Extreme,
+        title: "Matikan Fast Startup",
+        desc: "Shutdown jadi benar-benar mati, jadi driver dan kernel mulai bersih setiap menyala. Mencegah PC makin berat setelah berhari-hari tanpa restart. Boot dari mati sedikit lebih lama.",
+        reboot: false,
+        kind: Kind::Registry(&[dw(Hklm, "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power", "HiberbootEnabled", 0)]),
+    },
     Tweak {
         id: "memory_integrity",
         group: Group::Risky,
@@ -170,6 +281,14 @@ pub const TWEAKS: &[Tweak] = &[
             "Enabled",
             0,
         )]),
+    },
+    Tweak {
+        id: "cpu_mitigations",
+        group: Group::Risky,
+        title: "Matikan mitigasi Spectre dan Meltdown",
+        desc: "Menambah performa CPU, paling terasa di Intel generasi 9 ke bawah (bisa 5 sampai 15 persen pada game yang berat CPU); di CPU baru hasilnya kecil. PC jadi rentan terhadap serangan pembacaan memori lewat kode jahat yang berjalan di PC ini.",
+        reboot: true,
+        kind: Kind::Registry(&[dw(Hklm, MEMORY, "FeatureSettingsOverride", 3), dw(Hklm, MEMORY, "FeatureSettingsOverrideMask", 3)]),
     },
     Tweak {
         id: "mouse_accel",
@@ -217,6 +336,14 @@ pub const RAM_TWEAKS: &[Tweak] = &[
         desc: "Peta offline, lokasi (geolocation), mode demo toko, Program Compatibility Assistant, dan pelaporan error. Aplikasi cuaca dan Find My Device tidak bisa memakai lokasi.",
         reboot: true,
         kind: Kind::Services(&[("MapsBroker", 4), ("lfsvc", 4), ("RetailDemo", 4), ("PcaSvc", 4), ("WerSvc", 4)]),
+    },
+    Tweak {
+        id: "ram_svchost_group",
+        group: Group::Ram,
+        title: "Gabungkan layanan dalam sedikit svchost",
+        desc: "Windows memecah setiap layanan ke svchost.exe sendiri bila RAM di atas 3,5 GB. Dengan ini layanan digabung lagi: puluhan proses dan ratusan MB RAM berkurang. Bila satu layanan crash, layanan lain di proses yang sama ikut berhenti.",
+        reboot: true,
+        kind: Kind::Registry(&[dw(Hklm, "SYSTEM\\CurrentControlSet\\Control", "SvcHostSplitThresholdInKB", 0xFFFF_FFFF)]),
     },
     Tweak {
         id: "ram_spooler",
@@ -283,6 +410,7 @@ const WINDOWED_NAME: &str = "DirectXUserGlobalSettings";
 pub enum Saved {
     Dword(u32),
     Str(String),
+    Bin(Vec<u8>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -335,6 +463,7 @@ fn matches(item: &RegItem, cur: &Option<Saved>) -> bool {
     match (item.value, cur) {
         (Val::Dword(v), Some(Saved::Dword(c))) => v == *c,
         (Val::Str(v), Some(Saved::Str(c))) => v == c,
+        (Val::Bin(v), Some(Saved::Bin(c))) => v == c.as_slice(),
         _ => false,
     }
 }
@@ -419,6 +548,7 @@ pub fn apply(t: &Tweak, backup: &mut Backup) -> Result<(), String> {
                 let v = match item.value {
                     Val::Dword(d) => Saved::Dword(d),
                     Val::Str(s) => Saved::Str(s.into()),
+                    Val::Bin(b) => Saved::Bin(b.to_vec()),
                 };
                 reg::write(item.root, item.path, item.name, &v)?;
             }
@@ -496,6 +626,7 @@ pub(crate) mod reg {
     const KEY_WOW64_64KEY: u32 = 0x0100;
     const REG_SZ: u32 = 1;
     const REG_DWORD: u32 = 4;
+    const REG_BINARY: u32 = 3;
 
     fn wide(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(std::iter::once(0)).collect()
@@ -535,6 +666,7 @@ pub(crate) mod reg {
                     let w: Vec<u16> = buf[..len as usize].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
                     Some(Saved::Str(String::from_utf16_lossy(&w).trim_end_matches('\0').to_string()))
                 }
+                REG_BINARY => Some(Saved::Bin(buf[..len as usize].to_vec())),
                 _ => None,
             })
         }
@@ -563,6 +695,7 @@ pub(crate) mod reg {
                     let w = wide(s);
                     RegSetValueExW(k, wide(name).as_ptr(), 0, REG_SZ, w.as_ptr() as *const u8, (w.len() * 2) as u32)
                 }
+                Saved::Bin(b) => RegSetValueExW(k, wide(name).as_ptr(), 0, REG_BINARY, b.as_ptr(), b.len() as u32),
             };
             RegCloseKey(k);
             if r != 0 {
@@ -719,5 +852,28 @@ mod tests {
         let s = windowed_set("VRROptimizeEnable=0;SwapEffectUpgradeEnable=0;");
         assert_eq!(s, "SwapEffectUpgradeEnable=1;VRROptimizeEnable=0;");
         assert!(windowed_enabled(&s));
+    }
+
+    /// Mengubah registry sungguhan, jadi hanya dijalankan manual (misalnya di Wine):
+    /// `cargo test --target x86_64-pc-windows-gnu --lib -- --ignored registry_roundtrip`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn registry_roundtrip() {
+        let ids = ["x_visual_fx", "x_fso_gamebar", "x_kernel_in_ram", "x_ntfs", "x_fast_shutdown", "cpu_mitigations", "ram_svchost_group"];
+        let mut backup = Backup::default();
+        reg::write(Hkcu, DESKTOP, "UserPreferencesMask", &Saved::Bin(vec![0x9e, 0x1e, 0x07, 0x80, 0x12, 0, 0, 0])).unwrap();
+        for id in ids {
+            let t = all().find(|t| t.id == id).unwrap();
+            apply(t, &mut backup).unwrap();
+            assert_eq!(status(t), State::Applied, "{id}");
+        }
+        assert_eq!(reg::read(Hkcu, DESKTOP, "UserPreferencesMask").unwrap(), Some(Saved::Bin(vec![0x90, 0x12, 0x03, 0x80, 0x10, 0, 0, 0])));
+        for id in ids {
+            let t = all().find(|t| t.id == id).unwrap();
+            revert(t, &mut backup).unwrap();
+            assert_eq!(status(t), State::NotApplied, "{id}");
+        }
+        assert_eq!(reg::read(Hkcu, DESKTOP, "UserPreferencesMask").unwrap(), Some(Saved::Bin(vec![0x9e, 0x1e, 0x07, 0x80, 0x12, 0, 0, 0])));
     }
 }

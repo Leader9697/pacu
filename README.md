@@ -75,7 +75,7 @@ Tab **Overclock VRAM** mencari offset clock memori secara otomatis.
 - Rekam benchmark 30 detik sampai 5 menit dengan nama, lalu bandingkan hasilnya (FPS rata-rata, 1% low, 0,1% low) dalam persen terhadap rekaman pertama untuk game yang sama. Hasil disimpan di `%APPDATA%\Pacu\benchmark.json`.
 
 ### Optimasi Windows
-Sembilan pengaturan untuk gaming, masing-masing dengan status dan tombol Terapkan / Kembalikan. Nilai lama disimpan di `%APPDATA%\Pacu\tweaks-backup.json`.
+Pengaturan untuk gaming, masing-masing dengan status dan tombol Terapkan / Kembalikan. Nilai lama disimpan di `%APPDATA%\Pacu\tweaks-backup.json`.
 - Matikan perekaman latar Xbox Game Bar (Game DVR)
 - Nyalakan Game Mode Windows
 - Nyalakan Hardware-accelerated GPU scheduling (perlu restart)
@@ -86,7 +86,21 @@ Sembilan pengaturan untuk gaming, masing-masing dengan status dan tombol Terapka
 - **Profil driver NVIDIA untuk Deadlock** (baru): sama seperti Program Settings di NVIDIA Control Panel untuk `project8.exe`. Isinya Power management Prefer maximum performance, Low Latency Mode On, Threaded optimization On, dan Shader Cache On. Ditulis lewat NvAPI_DRS (NVAPI SDK publik). Bila belum ada profil yang memuat `project8.exe`, Pacu membuat profil "Pacu - project8.exe". Kembalikan menghapus nilai itu sehingga driver memakai bawaannya lagi.
 - Matikan akselerasi mouse
 
+**Ekstrem** (baru di v0.5.0, idenya diadaptasi dari playbook [AtlasOS](https://github.com/atlas-os/atlas), ditulis ulang untuk Pacu). Punya tombol "Terapkan semua" sendiri, dan setiap baris bisa dikembalikan:
+- Prioritaskan jendela aktif di penjadwal CPU (`Win32PrioritySeparation` 0x26)
+- Fullscreen eksklusif asli dan Game Bar mati total (FSO mati, kebijakan `AllowGameDVR` 0)
+- Kunci kernel di RAM dan matikan penggabungan halaman (`DisablePagingExecutive`, `DisablePageCombining`) (perlu restart)
+- Matikan Fault Tolerant Heap (perlu restart)
+- NTFS lebih ringan: tanpa pencatatan waktu akses terakhir dan tanpa nama pendek 8.3 (perlu restart)
+- Matikan animasi dan efek visual (berlaku setelah keluar-masuk akun)
+- Hapus jeda aplikasi startup
+- Matikan PC lebih cepat (aplikasi/layanan macet ditunggu 2 detik)
+- Matikan Fast Startup
+
+Power plan "Pacu Performa" juga ikut dari AtlasOS: CPU tidak masuk throttle state, interval cek performa 200 ms, NVMe tidak pernah idle, USB hub tidak di-suspend, dan USB 3 link power management mati.
+
 **Berisiko: mengurangi keamanan** (tidak ikut "Terapkan semua"):
+- **Matikan mitigasi Spectre dan Meltdown** (baru, perlu restart): `FeatureSettingsOverride` dan `FeatureSettingsOverrideMask` = 3. Paling terasa di Intel generasi 9 ke bawah; di CPU baru hasilnya kecil.
 - **Matikan Memory Integrity (HVCI)** (perlu restart): bisa menambah beberapa persen FPS, tetapi melemahkan perlindungan Windows terhadap driver dan malware tingkat kernel. Beberapa anti-cheat (Vanguard, FACEIT) bisa meminta fitur ini menyala. Bila dikunci UEFI atau kebijakan organisasi, pengaturan ini tidak berpengaruh; cek hasilnya di Windows Security → Device security → Core isolation.
 
 Defender, Firewall, dan mitigasi CPU tidak disentuh Pacu.
@@ -95,7 +109,7 @@ Defender, Firewall, dan mitigasi CPU tidak disentuh Pacu.
 Halaman untuk menekan RAM terpakai saat tidak bermain.
 - **Rampingkan sekarang** mengosongkan working set semua proses lalu menulis halaman termodifikasi ke pagefile, sehingga RAM terpakai langsung turun. Hasilnya (sebelum dan sesudah) ditampilkan dan dicatat di Aktivitas.
 - **Rampingkan otomatis** (nyala bawaan): tiap 5 menit bila RAM terpakai di atas 1,5 GB, dan tidak pernah selama Mode Game supaya game tidak tersendat. Interval dan batasnya bisa diubah.
-- **Layanan dan aplikasi latar**: SysMain, pengindeksan Windows Search, telemetri (DiagTrack), layanan jarang dipakai (peta, lokasi, mode demo, Program Compatibility Assistant, pelaporan error), Print Spooler, Widgets dan Copilot, Edge di latar, dan aplikasi Store di latar. Semua dicadangkan dan bisa dikembalikan; layanan berlaku setelah restart.
+- **Layanan dan aplikasi latar**: SysMain, pengindeksan Windows Search, telemetri (DiagTrack), layanan jarang dipakai (peta, lokasi, mode demo, Program Compatibility Assistant, pelaporan error), penggabungan layanan svchost (baru, dari AtlasOS), Print Spooler, Widgets dan Copilot, Edge di latar, dan aplikasi Store di latar. Semua dicadangkan dan bisa dikembalikan; layanan berlaku setelah restart.
 - **Aplikasi saat Windows menyala**: daftar aplikasi startup (registry Run, folder Startup, dan aplikasi Store seperti Teams) dengan sakelar nyala/mati. Caranya sama dengan tab Startup di Task Manager, jadi entri aslinya tidak dihapus.
 - **Pemakan RAM terbesar**: 10 aplikasi dengan working set terbesar, digabung per nama.
 - Target 1 GB biasanya tidak tercapai: Windows 11 sendiri (kernel, Explorer, Defender, driver GPU, layanan inti) umumnya sudah memakai lebih dari itu, dan Pacu tidak membuang Defender atau komponen inti. Setelah dirampingkan, angkanya naik lagi pelan-pelan saat aplikasi dipakai; halaman yang dibutuhkan dibaca balik dari RAM standby, bukan dari disk.
@@ -176,6 +190,7 @@ Di Linux, `cargo run` menjalankan UI dengan data proses simulasi. `cargo test` m
 - `src/ui/monitor_page.rs` — halaman Monitor & Overlay
 
 ## Lisensi pihak ketiga
+- Beberapa tweak di halaman Optimasi Windows, RAM Ekstrem, dan power plan terinspirasi playbook AtlasOS (© tim AtlasOS, GPL-3.0). Yang diambil hanya idenya (nilai registry dan setelan power plan yang terdokumentasi); kodenya ditulis ulang, tidak ada file AtlasOS yang disalin atau dibundel.
 - Fluent System Icons © Microsoft, lisensi MIT (subset di `res/fonts/FluentIcons.ttf`, lisensi di `res/fonts/FluentSystemIcons-LICENSE.txt`).
 - PresentMon 2.6.0 © Intel Corporation, lisensi MIT. Teks lisensinya ada di `res/PresentMon-LICENSE.txt`.
 - Modul PawnIO `IntelMSR.bin` dan `AMDFamily17.bin` (bertanda tangan, dari proyek PawnIO.Modules), lisensi LGPL 2.1, teks lisensinya di `res/pawnio/LICENSE-PawnIO.Modules.txt`. Driver PawnIO sendiri tidak pernah dibundel; dipasang terpisah oleh pengguna.
