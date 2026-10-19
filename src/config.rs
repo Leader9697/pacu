@@ -282,6 +282,7 @@ pub struct Config {
     pub general: GeneralConfig,
     pub overlay: OverlayConfig,
     pub ram: RamConfig,
+    pub discord: DiscordConfig,
     pub wake: WakeConfig,
     pub update: UpdateConfig,
 }
@@ -322,6 +323,28 @@ pub struct RamConfig {
 impl Default for RamConfig {
     fn default() -> Self {
         RamConfig { auto_trim: true, interval_min: 5, min_used_mb: 1536 }
+    }
+}
+
+/// Penghemat RAM khusus Discord (semua proses Discord.exe, PTB, dan Canary).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DiscordConfig {
+    pub enabled: bool,
+    /// Kosongkan working set Discord berkala selama jendelanya tidak di depan.
+    pub trim: bool,
+    pub trim_interval_secs: u64,
+    /// Tetap rampingkan saat Mode Game (hanya Discord, game tidak ikut tersentuh).
+    pub trim_in_game: bool,
+    /// Saat Mode Game: prioritas CPU di bawah normal, I/O rendah, dan Efficiency Mode.
+    pub tame_in_game: bool,
+    /// Batas keras RAM fisik per proses Discord (MB), 0 = mati. Dilepas saat Discord dibuka.
+    pub hard_limit_mb: u64,
+}
+
+impl Default for DiscordConfig {
+    fn default() -> Self {
+        DiscordConfig { enabled: true, trim: true, trim_interval_secs: 60, trim_in_game: true, tame_in_game: true, hard_limit_mb: 0 }
     }
 }
 

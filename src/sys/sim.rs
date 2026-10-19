@@ -27,6 +27,8 @@ pub struct SimSys {
     user: u64,
     prio: Mutex<HashMap<u32, Priority>>,
     plan: Mutex<String>,
+    /// Waktu proses terakhir dirampingkan; working set-nya tumbuh lagi pelan-pelan.
+    trimmed: Mutex<HashMap<u32, Instant>>,
 }
 
 const LOGICAL: u32 = 20;
@@ -52,6 +54,8 @@ impl SimSys {
             p(4120, "chrome.exe", "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", 1, |t| 1.0 + (t * 0.7).sin().abs() * 2.0, 480),
             p(4122, "chrome.exe", "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", 1, |_| 0.4, 220),
             p(5010, "Discord.exe", "C:\\Users\\Faris\\AppData\\Local\\Discord\\app-1.0\\Discord.exe", 1, |_| 0.8, 310),
+            p(5011, "Discord.exe", "C:\\Users\\Faris\\AppData\\Local\\Discord\\app-1.0\\Discord.exe", 1, |_| 0.4, 420),
+            p(5012, "Discord.exe", "C:\\Users\\Faris\\AppData\\Local\\Discord\\app-1.0\\Discord.exe", 1, |_| 0.2, 180),
             p(5502, "OneDrive.exe", "C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe", 1, |t| if (t as u64 / 15).is_multiple_of(2) { 9.0 } else { 0.3 }, 120),
             p(6100, "HandBrake.exe", "C:\\Program Files\\HandBrake\\HandBrake.exe", 1, |_| 38.0, 650),
             p(7020, "steam.exe", "C:\\Program Files (x86)\\Steam\\steam.exe", 1, |_| 0.7, 260),
@@ -67,6 +71,7 @@ impl SimSys {
             user: 0,
             prio: Mutex::new(HashMap::new()),
             plan: Mutex::new("381b4222-f694-41f0-9685-ff5bb260df2e".into()),
+            trimmed: Mutex::new(HashMap::new()),
         }
     }
 
@@ -107,6 +112,7 @@ impl Default for SimSys {
 impl Sys for SimSys {
     fn processes(&mut self) -> Vec<RawProc> {
         self.advance();
+        let trimmed = self.trimmed.lock().clone();
         self.procs
             .iter()
             .map(|p| RawProc {
@@ -116,7 +122,14 @@ impl Sys for SimSys {
                 name: p.name.to_string(),
                 session: p.session,
                 cpu_time: p.cpu_time,
-                working_set: p.ws_mb << 20,
+                working_set: match trimmed.get(&p.pid) {
+                    // Setelah dirampingkan tinggal ~15%, lalu naik kembali dalam 2 menit.
+                    Some(t) => {
+                        let f = (0.15 + t.elapsed().as_secs_f64() / 120.0 * 0.85).min(1.0);
+                        ((p.ws_mb as f64 * f) as u64) << 20
+                    }
+                    None => p.ws_mb << 20,
+                },
                 base_priority: match p.priority {
                     Priority::Idle => 4,
                     Priority::BelowNormal => 6,
@@ -242,6 +255,15 @@ impl Sys for SimSys {
     }
 
     fn trim_memory(&mut self) -> bool {
+        true
+    }
+
+    fn trim_process(&self, pid: u32) -> bool {
+        self.trimmed.lock().insert(pid, Instant::now());
+        true
+    }
+
+    fn limit_working_set(&self, _: u32, _: Option<u64>) -> bool {
         true
     }
 }

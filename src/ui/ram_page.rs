@@ -2,6 +2,7 @@
 //! mengatur aplikasi yang ikut berjalan saat Windows menyala.
 
 use super::*;
+use crate::discord;
 use crate::startup;
 use std::collections::HashMap;
 
@@ -11,12 +12,31 @@ fn gb(mb: u64) -> String {
 
 const INTERVALS: [u64; 6] = [1, 3, 5, 10, 15, 30];
 
+fn interval_label(secs: u64) -> String {
+    if secs < 60 {
+        format!("{secs} detik")
+    } else {
+        format!("{} menit", secs / 60)
+    }
+}
+
+fn cap_label(mb: u64) -> String {
+    if mb == 0 {
+        "Mati".into()
+    } else {
+        format!("{mb} MB")
+    }
+}
+
 impl PacuApp {
     pub(super) fn page_ram(&mut self, ui: &mut egui::Ui) {
         page_header(ui, "RAM Ekstrem", "Menekan pemakaian RAM saat tidak bermain: merampingkan proses, mematikan layanan latar, dan menyaring aplikasi startup.");
         self.ram_now_card(ui);
         ui.add_space(10.0);
         self.ram_target_note(ui);
+        ui.add_space(14.0);
+
+        self.discord_section(ui);
         ui.add_space(14.0);
 
         self.tweak_header(ui, "Layanan dan aplikasi latar", tweaks::Group::Ram);
@@ -98,6 +118,162 @@ impl PacuApp {
                     }
                 });
             });
+        });
+        if changed {
+            self.apply_config();
+        }
+    }
+
+    fn discord_section(&mut self, ui: &mut egui::Ui) {
+        if !self.discord_loaded {
+            self.discord_clients = discord::clients();
+            self.discord_loaded = true;
+        }
+        let st = self.snap.discord.clone();
+        let mut changed = false;
+        ui.label(section("Discord"));
+        ui.label(muted(
+            "Discord (Electron) mudah memakan 500 MB sampai 1,5 GB. Pacu merampingkannya berkala, meredamnya selama bermain, \
+             dan bisa memasang batas keras RAM. Semua dilepas saat jendela Discord kamu buka, jadi chat dan voice tetap lancar.",
+        ));
+        ui.add_space(8.0);
+        card(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label(muted("RAM Discord sekarang"));
+                    if st.procs == 0 {
+                        ui.label(RichText::new("Tidak berjalan").font(theme::semibold(20.0)).color(MUTED));
+                    } else {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(format!("{:.0}", st.mem_mb)).font(theme::semibold(28.0)));
+                            ui.label(muted(format!("MB, {} proses", st.procs)));
+                        });
+                    }
+                });
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.add_enabled(st.procs > 0, accent_button("Rampingkan Discord")).clicked() {
+                        self.send(Command::TrimDiscord);
+                        self.status = Some(("Merampingkan Discord...".into(), 0.0));
+                    }
+                });
+            });
+            let mut tags = Vec::new();
+            if st.tamed {
+                tags.push("diredam selama bermain");
+            }
+            if st.capped {
+                tags.push("batas RAM aktif");
+            }
+            if let Some(r) = &st.last {
+                let how = if r.auto { "otomatis" } else { "manual" };
+                ui.label(RichText::new(format!(
+                    "Terakhir dirampingkan ({how}, {:02}:{:02}): {} MB ke {} MB{}",
+                    r.at.0,
+                    r.at.1,
+                    r.before_mb,
+                    r.after_mb,
+                    if tags.is_empty() { String::new() } else { format!(" · {}", tags.join(", ")) }
+                ))
+                .color(GREEN));
+            } else if !tags.is_empty() {
+                ui.label(RichText::new(tags.join(", ")).color(GREEN));
+            }
+            ui.add_space(8.0);
+            let dc = &mut self.cfg.discord;
+            changed |= setting_row(ui, &mut dc.enabled, "Penghemat RAM Discord", "Berlaku untuk Discord, PTB, Canary, dan Vesktop.");
+            ui.add_enabled_ui(dc.enabled, |ui| {
+                changed |= setting_row(
+                    ui,
+                    &mut dc.trim,
+                    "Rampingkan berkala",
+                    "Mengosongkan working set Discord selama jendelanya tidak di depan. Halaman yang dipakai lagi dibaca balik dari RAM standby.",
+                );
+                ui.horizontal(|ui| {
+                    ui.label(muted("Tiap"));
+                    egui::ComboBox::from_id_salt("discord_interval")
+                        .selected_text(interval_label(dc.trim_interval_secs))
+                        .width(100.0)
+                        .show_ui(ui, |ui| {
+                            for s in [30u64, 60, 120, 300] {
+                                changed |= ui.selectable_value(&mut dc.trim_interval_secs, s, interval_label(s)).changed();
+                            }
+                        });
+                    ui.add_space(12.0);
+                    changed |= ui.checkbox(&mut dc.trim_in_game, "Juga saat bermain").changed();
+                });
+                changed |= setting_row(
+                    ui,
+                    &mut dc.tame_in_game,
+                    "Redam saat Mode Game",
+                    "Prioritas CPU di bawah normal, I/O rendah, dan Efficiency Mode selama game jalan. Matikan bila suara voice jadi patah-patah.",
+                );
+                ui.horizontal(|ui| {
+                    ui.label(strong("Batas keras RAM per proses"));
+                    egui::ComboBox::from_id_salt("discord_cap")
+                        .selected_text(cap_label(dc.hard_limit_mb))
+                        .width(110.0)
+                        .show_ui(ui, |ui| {
+                            for mb in [0u64, 150, 250, 400, 600] {
+                                changed |= ui.selectable_value(&mut dc.hard_limit_mb, mb, cap_label(mb)).changed();
+                            }
+                        });
+                });
+                ui.label(muted(
+                    "Paling agresif: Windows tidak mengizinkan proses Discord memakai RAM fisik melebihi angka ini; sisanya dipindah ke standby atau pagefile. \
+                     Discord bisa terasa lambat sesaat saat dibuka. 250 MB adalah titik awal yang wajar.",
+                ));
+            });
+
+            ui.add_space(10.0);
+            ui.label(strong("Pengaturan di dalam Discord"));
+            ui.label(muted("Discord ditutup sebentar lalu dibuka lagi karena ia menimpa pengaturannya saat keluar."));
+            ui.add_space(4.0);
+            if self.discord_clients.is_empty() {
+                ui.label(muted("Discord tidak ditemukan di akun Windows ini."));
+            }
+            let mut action: Option<(usize, &'static str, bool)> = None;
+            for (i, c) in self.discord_clients.iter().enumerate() {
+                let multi = self.discord_clients.len() > 1;
+                let pre = if multi { format!("{}: ", c.label) } else { String::new() };
+                ui.horizontal(|ui| {
+                    let mut v = !c.hw_accel;
+                    if toggle(ui, &mut v).changed() {
+                        action = Some((i, discord::HW_ACCEL, !v));
+                    }
+                    ui.add_space(8.0);
+                    ui.vertical(|ui| {
+                        ui.label(strong(format!("{pre}Matikan akselerasi hardware")));
+                        ui.label(muted("Proses GPU Discord tidak lagi memakai VRAM dan RAM untuk menggambar; VRAM lebih lega untuk game. CPU Discord sedikit naik."));
+                    });
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    let mut v = !c.open_on_startup;
+                    if toggle(ui, &mut v).changed() {
+                        action = Some((i, discord::OPEN_ON_STARTUP, !v));
+                    }
+                    ui.add_space(8.0);
+                    ui.vertical(|ui| {
+                        ui.label(strong(format!("{pre}Jangan buka Discord saat Windows menyala")));
+                        ui.label(muted("Discord tidak memakan RAM sampai kamu membukanya sendiri. Entri Discord di daftar startup di bawah juga bisa dimatikan."));
+                    });
+                });
+                ui.add_space(4.0);
+            }
+            if let Some((i, key, value)) = action {
+                let c = self.discord_clients[i].clone();
+                self.status = Some((
+                    match discord::apply(&c, key, value) {
+                        Ok(true) => format!("{} diperbarui dan dibuka lagi.", c.label),
+                        Ok(false) => format!("Pengaturan {} disimpan.", c.label),
+                        Err(e) => format!("Gagal: {e}"),
+                    },
+                    0.0,
+                ));
+                self.send(Command::Log(format!("Pengaturan {}: {key} = {value}", c.label)));
+                self.discord_clients = discord::clients();
+            }
         });
         if changed {
             self.apply_config();

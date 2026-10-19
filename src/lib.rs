@@ -15,3 +15,4 @@ pub mod volt;
 pub mod monitor;
 pub mod update;
 pub mod wake;
+pub mod discord;

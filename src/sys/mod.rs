@@ -106,6 +106,11 @@ pub trait Sys {
     /// Mengosongkan working set semua proses lalu menulis halaman termodifikasi ke pagefile, sehingga
     /// RAM "terpakai" turun. Halaman yang dibutuhkan lagi dibaca balik dari standby (soft fault).
     fn trim_memory(&mut self) -> bool;
+    /// Mengosongkan working set satu proses (EmptyWorkingSet).
+    fn trim_process(&self, pid: u32) -> bool;
+    /// `Some(mb)` = batas keras working set (proses tidak boleh memakai RAM fisik lebih dari ini),
+    /// `None` = lepas batas.
+    fn limit_working_set(&self, pid: u32, max_mb: Option<u64>) -> bool;
 }
 
 #[cfg(windows)]

@@ -120,6 +120,11 @@ Halaman untuk menekan RAM terpakai saat tidak bermain.
 - **Rampingkan otomatis** (nyala bawaan): tiap 5 menit bila RAM terpakai di atas 1,5 GB, dan tidak pernah selama Mode Game supaya game tidak tersendat. Interval dan batasnya bisa diubah.
 - **Layanan dan aplikasi latar**: SysMain, pengindeksan Windows Search, telemetri (DiagTrack), layanan jarang dipakai (peta, lokasi, mode demo, Program Compatibility Assistant, pelaporan error), penggabungan layanan svchost (baru, dari AtlasOS), Print Spooler, Widgets dan Copilot, Edge di latar, dan aplikasi Store di latar. Semua dicadangkan dan bisa dikembalikan; layanan berlaku setelah restart.
 - **Aplikasi saat Windows menyala**: daftar aplikasi startup (registry Run, folder Startup, dan aplikasi Store seperti Teams) dengan sakelar nyala/mati. Caranya sama dengan tab Startup di Task Manager, jadi entri aslinya tidak dihapus.
+- **Discord** (baru di v0.7): penghemat RAM khusus Discord, PTB, Canary, dan Vesktop.
+  - *Rampingkan berkala* (bawaan tiap 1 menit, juga saat bermain): mengosongkan working set semua proses Discord selama jendelanya tidak di depan. Angka RAM Discord langsung turun, lalu naik pelan-pelan sesuai pemakaian; halaman yang dipakai lagi dibaca balik dari RAM standby.
+  - *Redam saat Mode Game*: prioritas CPU di bawah normal, I/O rendah, dan Efficiency Mode selama game jalan; dikembalikan saat Mode Game mati atau saat jendela Discord dibuka.
+  - *Batas keras RAM per proses* (mati bawaan; 150, 250, 400, atau 600 MB): Windows tidak mengizinkan proses Discord memakai RAM fisik melebihi angka itu (`SetProcessWorkingSetSizeEx` dengan `QUOTA_LIMITS_HARDWS_MAX_ENABLE`). Batas dilepas selama jendela Discord di depan dan dipasang lagi setelahnya.
+  - *Pengaturan di dalam Discord*: matikan akselerasi hardware dan "buka saat Windows menyala" lewat `settings.json` Discord. Discord ditutup, file dicadangkan ke `settings.json.pacu-bak`, lalu Discord dibuka lagi.
 - **Pemakan RAM terbesar**: 10 aplikasi dengan working set terbesar, digabung per nama.
 - Target 1 GB biasanya tidak tercapai: Windows 11 sendiri (kernel, Explorer, Defender, driver GPU, layanan inti) umumnya sudah memakai lebih dari itu, dan Pacu tidak membuang Defender atau komponen inti. Setelah dirampingkan, angkanya naik lagi pelan-pelan saat aplikasi dipakai; halaman yang dibutuhkan dibaca balik dari RAM standby, bukan dari disk.
 
@@ -192,6 +197,7 @@ Di Linux, `cargo run` menjalankan UI dengan data proses simulasi. `cargo test` m
 - `src/presets.rs` — preset game
 - `src/tweaks.rs` — optimasi Windows (termasuk layanan untuk RAM Ekstrem) dan cadangannya
 - `src/startup.rs` — daftar dan sakelar aplikasi startup
+- `src/discord.rs` — penghemat RAM Discord: nama proses dan pengaturan `settings.json`
 - `src/nvprofile.rs` — profil driver NVIDIA per game (NvAPI_DRS)
 - `src/volt/vram.rs` — overclock VRAM otomatis (uji bandwidth D3D11 dan pencarian offset)
 - `src/ui/ram_page.rs` — halaman RAM Ekstrem

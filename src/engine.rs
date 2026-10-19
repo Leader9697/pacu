@@ -3,6 +3,7 @@
 
 use crate::balancer::{self, Action, Balancer, ProcKey, Sample};
 use crate::config::{Config, GpuPriority, IoPriority, PowerPlanChoice, Priority};
+use crate::discord;
 use crate::matcher;
 use crate::sys::{MemInfo, PowerPlan, RawProc, Sys, Topology, HIGH_PERFORMANCE, ULTIMATE_PERFORMANCE};
 use parking_lot::RwLock;
@@ -106,6 +107,7 @@ pub struct Snapshot {
     pub balancer_active: bool,
     pub frozen: Vec<String>,
     pub last_trim: Option<TrimResult>,
+    pub discord: DiscordStat,
     /// Naik setiap siklus supaya UI tahu ada data baru.
     pub version: u64,
 }
@@ -119,7 +121,21 @@ pub struct TrimResult {
     pub at: (u16, u16, u16),
 }
 
+/// Keadaan penghemat RAM Discord untuk halaman RAM Ekstrem.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DiscordStat {
+    pub procs: usize,
+    pub mem_mb: f32,
+    /// Sedang diredam karena Mode Game.
+    pub tamed: bool,
+    /// Batas keras working set sedang terpasang.
+    pub capped: bool,
+    pub last: Option<TrimResult>,
+}
+
 pub enum Command {
+    /// Rampingkan semua proses Discord sekarang.
+    TrimDiscord,
     /// Rampingkan RAM sekarang (dari tombol di halaman RAM).
     TrimRam,
     UpdateConfig(Box<Config>),
@@ -149,6 +165,12 @@ struct Applied {
     io: bool,
     efficiency: bool,
     cpu_sets: bool,
+}
+
+#[derive(Default)]
+struct DiscordProc {
+    tamed: bool,
+    capped: Option<u64>,
 }
 
 struct GameMode {
@@ -181,6 +203,9 @@ pub struct Engine<S: Sys> {
     log_file: Option<std::fs::File>,
     last_trim: Option<TrimResult>,
     last_trim_at: Instant,
+    discord: HashMap<ProcKey, DiscordProc>,
+    discord_last_trim: Option<TrimResult>,
+    discord_trim_at: Instant,
 }
 
 impl<S: Sys> Engine<S> {
@@ -206,6 +231,9 @@ impl<S: Sys> Engine<S> {
             log_file,
             last_trim: None,
             last_trim_at: Instant::now(),
+            discord: HashMap::new(),
+            discord_last_trim: None,
+            discord_trim_at: Instant::now(),
         };
         let t = &e.topology;
         let msg = if t.hybrid() {
@@ -299,6 +327,7 @@ impl<S: Sys> Engine<S> {
             }
             Command::Log(text) => self.log(LogKind::Info, text),
             Command::TrimRam => self.trim_ram(false),
+            Command::TrimDiscord => self.trim_discord(false),
             Command::Quit => {}
         }
     }
@@ -328,6 +357,100 @@ impl<S: Sys> Engine<S> {
         let how = if auto { "otomatis" } else { "manual" };
         self.log(LogKind::Rule, format!("RAM dirampingkan ({how}): terpakai {} GB ke {} GB.", gb(r.before_mb), gb(r.after_mb)));
         self.last_trim = Some(r);
+    }
+
+    /// Mengosongkan working set semua proses Discord dan mencatat RAM yang dibebaskan.
+    fn trim_discord(&mut self, auto: bool) {
+        self.discord_trim_at = Instant::now();
+        let ws = |raw: &[RawProc], pids: &HashSet<u32>| -> u64 {
+            raw.iter().filter(|p| pids.contains(&p.pid)).map(|p| p.working_set >> 20).sum()
+        };
+        let raw = self.sys.processes();
+        let pids: HashSet<u32> =
+            raw.iter().filter(|p| discord::is_discord(&p.name.to_lowercase())).map(|p| p.pid).collect();
+        if pids.is_empty() {
+            if !auto {
+                self.log(LogKind::Info, "Discord tidak sedang berjalan.".into());
+            }
+            return;
+        }
+        let before = ws(&raw, &pids);
+        let ok = pids.iter().filter(|&&pid| self.sys.trim_process(pid)).count();
+        if ok == 0 {
+            if !auto {
+                self.log(LogKind::Warn, "Gagal merampingkan Discord (akses ditolak).".into());
+            }
+            return;
+        }
+        let after = ws(&self.sys.processes(), &pids);
+        let r = TrimResult { before_mb: before, after_mb: after.min(before), auto, at: self.sys.local_time() };
+        let freed = r.before_mb - r.after_mb;
+        // Perampingan otomatis berjalan tiap menit; dicatat hanya bila hasilnya berarti.
+        if !auto || freed >= 200 {
+            let how = if auto { "otomatis" } else { "manual" };
+            self.log(LogKind::Rule, format!("Discord dirampingkan ({how}): {before} MB ke {} MB, hemat {freed} MB.", r.after_mb));
+        }
+        self.discord_last_trim = Some(r);
+    }
+
+    /// Penghemat RAM Discord: perampingan berkala, redam saat Mode Game, dan batas keras RAM.
+    /// Semua dilepas selama jendela Discord ada di depan supaya tetap responsif.
+    fn discord_maintenance(&mut self, raw: &[RawProc], fg_pid: u32) {
+        let dc = self.cfg.discord.clone();
+        let procs: Vec<(ProcKey, u32, i32)> = raw
+            .iter()
+            .filter(|p| self.known.get(&key_of(p)).map(|k| discord::is_discord(&k.name_lc)).unwrap_or(false))
+            .map(|p| (key_of(p), p.pid, p.base_priority))
+            .collect();
+        self.discord.retain(|k, _| procs.iter().any(|p| p.0 == *k));
+        if procs.is_empty() {
+            return;
+        }
+        let active = procs.iter().any(|p| p.1 == fg_pid);
+        let in_game = self.game.is_some();
+        let want_tame = dc.enabled && dc.tame_in_game && in_game && !active;
+        let want_cap = (dc.enabled && dc.hard_limit_mb > 0 && !active).then_some(dc.hard_limit_mb);
+        let (mut tamed, mut untamed) = (0, 0);
+        for &(key, pid, base) in &procs {
+            let st = self.discord.entry(key).or_default();
+            if want_tame {
+                // Diulang bila prioritasnya dinaikkan lagi oleh pihak lain.
+                if !st.tamed || base > 6 {
+                    self.sys.set_priority(pid, Priority::BelowNormal);
+                    self.sys.set_io_priority(pid, IoPriority::Low);
+                    self.sys.set_efficiency(pid, Some(true));
+                    if !st.tamed {
+                        tamed += 1;
+                    }
+                    st.tamed = true;
+                }
+            } else if st.tamed {
+                self.sys.set_priority(pid, Priority::Normal);
+                self.sys.set_io_priority(pid, IoPriority::Normal);
+                self.sys.set_efficiency(pid, None);
+                st.tamed = false;
+                untamed += 1;
+            }
+            // Batas dipasang ulang tiap kali Discord tidak di depan, jadi tidak dicatat di log.
+            if st.capped != want_cap && self.sys.limit_working_set(pid, want_cap) {
+                st.capped = want_cap;
+            }
+        }
+        if tamed > 0 {
+            self.log(LogKind::Game, format!("Discord diredam selama bermain ({tamed} proses): prioritas rendah dan Efficiency Mode."));
+        }
+        if untamed > 0 && !active {
+            self.log(LogKind::Game, "Discord kembali normal.".into());
+        }
+        let interval = dc.trim_interval_secs.max(15);
+        let due = dc.enabled
+            && dc.trim
+            && !active
+            && (!in_game || dc.trim_in_game)
+            && self.discord_trim_at.elapsed().as_secs() >= interval;
+        if due {
+            self.trim_discord(true);
+        }
     }
 
     /// Perampingan berkala, hanya saat tidak bermain supaya game tidak tersendat.
@@ -446,6 +569,8 @@ impl<S: Sys> Engine<S> {
         self.update_game_mode(&raw, fg, &cpu);
         let game_pid = self.game.as_ref().and_then(|g| g.info.pid);
         self.game_maintenance(&raw, &fg_tree, game_pid);
+        self.discord_maintenance(&raw, fg_pid);
+        let discord_tamed = self.discord.values().any(|d| d.tamed);
 
         // Penyeimbang CPU.
         let cfgb = self.cfg.balancer.clone();
@@ -468,6 +593,7 @@ impl<S: Sys> Engine<S> {
             let protected = (cfgb.exclude_services && p.session == 0)
                 || (cfgb.exclude_foreground && fg_tree.contains(&p.pid))
                 || Some(p.pid) == game_pid
+                || (discord_tamed && discord::is_discord(&k.name_lc))
                 || CRITICAL.contains(&k.name_lc.as_str())
                 || matcher::matches_any(&cfgb.exclusions, &k.name_lc, &k.path_lc)
                 || matcher::matches_any(&self.cfg.game.games, &k.name_lc, &k.path_lc)
@@ -981,6 +1107,19 @@ impl<S: Sys> Engine<S> {
             })
             .unwrap_or_default();
         s.last_trim = self.last_trim.clone();
+        s.discord = DiscordStat {
+            procs: 0,
+            mem_mb: 0.0,
+            tamed: self.discord.values().any(|d| d.tamed),
+            capped: self.discord.values().any(|d| d.capped.is_some()),
+            last: self.discord_last_trim.clone(),
+        };
+        for p in raw {
+            if discord::is_discord(&p.name.to_lowercase()) {
+                s.discord.procs += 1;
+                s.discord.mem_mb += (p.working_set >> 20) as f32;
+            }
+        }
         s.version = self.tick_count;
     }
 
@@ -998,6 +1137,16 @@ impl<S: Sys> Engine<S> {
         }
         if self.game.is_some() {
             self.exit_game_mode();
+        }
+        for (key, d) in std::mem::take(&mut self.discord) {
+            if d.tamed {
+                self.sys.set_priority(key.pid, Priority::Normal);
+                self.sys.set_io_priority(key.pid, IoPriority::Normal);
+                self.sys.set_efficiency(key.pid, None);
+            }
+            if d.capped.is_some() {
+                self.sys.limit_working_set(key.pid, None);
+            }
         }
         self.log(LogKind::Info, "Pacu berhenti; semua perubahan sementara dikembalikan.".into());
     }

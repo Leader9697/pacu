@@ -168,6 +168,8 @@ pub struct PacuApp {
     reboot_needed: bool,
     startup: Vec<crate::startup::Entry>,
     startup_loaded: bool,
+    discord_clients: Vec<crate::discord::Client>,
+    discord_loaded: bool,
     updater: crate::update::Updater,
     update_next_check: f64,
     wake_list: Option<Result<Vec<crate::wake::Device>, String>>,
@@ -223,6 +225,8 @@ impl PacuApp {
             reboot_needed: false,
             startup: Vec::new(),
             startup_loaded: false,
+            discord_clients: Vec::new(),
+            discord_loaded: false,
             updater: crate::update::Updater::default(),
             // Pemeriksaan pertama beberapa detik setelah menyala, supaya tidak menunda jendela.
             update_next_check: 5.0,

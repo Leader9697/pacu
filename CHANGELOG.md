@@ -1,5 +1,9 @@
 # Catatan rilis
 
+## v0.7.0
+- RAM Ekstrem punya bagian baru **Discord**: Discord dirampingkan tiap 1 menit selama jendelanya tidak dibuka (juga saat bermain, tanpa menyentuh game), diredam selama Mode Game (prioritas rendah, I/O rendah, Efficiency Mode), dan bisa diberi batas keras RAM per proses. Semua dilepas otomatis saat jendela Discord kamu buka supaya chat dan voice tetap lancar.
+- Dari Pacu kamu bisa mematikan akselerasi hardware Discord dan "buka saat Windows menyala". Pacu menutup Discord sebentar, menyimpan cadangan pengaturan, lalu membukanya lagi.
+
 ## v0.6.0
 - Installer resmi **Pacu-Setup.exe**: memasang ke Program Files, membuat shortcut Start Menu dan desktop, dan mendaftarkan Pacu di Settings → Apps lengkap dengan uninstall. Uninstall juga menghapus tugas Task Scheduler milik Pacu dan menawarkan untuk menghapus pengaturan. `Pacu.exe` portable tetap tersedia.
 - Pembaruan otomatis juga bekerja untuk Pacu yang dipasang lewat installer, dan versi di Settings → Apps ikut diperbarui.

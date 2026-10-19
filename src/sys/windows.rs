@@ -107,6 +107,8 @@ extern "system" {
     fn SetThreadExecutionState(flags: u32) -> u32;
     fn LocalFree(p: *mut c_void) -> *mut c_void;
     fn GetLocalTime(t: *mut [u16; 8]);
+    fn K32EmptyWorkingSet(h: HANDLE) -> BOOL;
+    fn SetProcessWorkingSetSizeEx(h: HANDLE, min: usize, max: usize, flags: u32) -> BOOL;
 }
 
 #[link(name = "user32")]
@@ -215,6 +217,8 @@ const PERFORMANCE_SETTINGS: &[(&str, &str, u32)] = &[
     ("238c9fa8-0aad-41ed-83f4-97be242c8f20", "9d7815a6-7ee4-497e-8888-515a05f02364", 0),
 ];
 const PROCESS_SET_INFORMATION: u32 = 0x0200;
+const PROCESS_SET_QUOTA: u32 = 0x0100;
+const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
 const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 const PROCESS_SET_LIMITED_INFORMATION: u32 = 0x2000;
 const STATUS_INFO_LENGTH_MISMATCH: NTSTATUS = 0xC000_0004u32 as i32;
@@ -720,6 +724,24 @@ impl Sys for WinSys {
             NtSetSystemInformation(80, &flush as *const u32 as *const c_void, 4);
             ok
         }
+    }
+
+    fn trim_process(&self, pid: u32) -> bool {
+        Handle::open(pid, PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION)
+            .map(|h| unsafe { K32EmptyWorkingSet(h.0) } != 0)
+            .unwrap_or(false)
+    }
+
+    fn limit_working_set(&self, pid: u32, max_mb: Option<u64>) -> bool {
+        // QUOTA_LIMITS_HARDWS_MIN_DISABLE = 0x2, _MAX_ENABLE = 0x4, _MAX_DISABLE = 0x8.
+        // Saat batas dilepas, min/max dikembalikan ke nilai bawaan Windows (200 KB / 1380 KB, lunak).
+        let (min, max, flags) = match max_mb {
+            Some(mb) => (1usize << 20, (mb.max(32) as usize) << 20, 0x2 | 0x4),
+            None => (200 * 1024, 1380 * 1024, 0x2 | 0x8),
+        };
+        Handle::open(pid, PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION)
+            .map(|h| unsafe { SetProcessWorkingSetSizeEx(h.0, min, max, flags) } != 0)
+            .unwrap_or(false)
     }
 }
 
