@@ -20,7 +20,7 @@ Semua perubahan Mode Game bersifat sementara: saat game ditutup atau Pacu keluar
 Mengikuti sistem desain Fluent Windows 11 (seperti aplikasi Settings dan Task Manager): font Segoe UI dari Windows, ikon Fluent System Icons, warna aksen mengikuti Personalisasi Windows, menu samping berkelompok, kartu pengaturan dengan sakelar Aktif/Nonaktif. Halaman Monitor memakai tabel sensor ala HWiNFO (Sekarang, Minimum, Maksimum, Rata-rata sejak Pacu dibuka, bisa direset).
 
 ## Pembaruan
-Pacu memeriksa rilis baru di [GitHub Releases](https://github.com/Leader9697/pacu/releases) saat menyala dan tiap 6 jam (bisa dimatikan di Pengaturan). Unduhan lewat HTTPS dicocokkan dengan SHA-256 dari rilis, lalu exe lama diganti setelah kamu menekan "Mulai ulang". Rilis dibuat otomatis oleh GitHub Actions setiap ada tag `vX.Y.Z`.
+Pacu memeriksa rilis baru di [GitHub Releases](https://github.com/Leader9697/pacu/releases) saat menyala dan tiap 6 jam (bisa dimatikan di Pengaturan). Unduhan lewat HTTPS dicocokkan dengan SHA-256 dari rilis, lalu exe lama diganti setelah kamu menekan "Mulai ulang". Rilis dibuat otomatis oleh GitHub Actions setiap version di `Cargo.toml` dinaikkan dan di-push ke `main`.
 
 
 ### Mode Game

@@ -1,9 +1,12 @@
 name: Rilis
 
-# Dorong tag "vX.Y.Z" (sama dengan version di Cargo.toml) untuk membangun dan merilis Pacu.exe.
+# Setiap push ke main yang menaikkan version di Cargo.toml membangun dan merilis Pacu.exe dengan
+# tag "vX.Y.Z". Versi yang sudah punya rilis dilewati. Bisa juga dijalankan manual.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: ["Cargo.toml", ".github/workflows/release.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,37 +17,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cek versi tag sama dengan Cargo.toml
+      - name: Tentukan versi
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          want="${GITHUB_REF_NAME#v}"
-          have="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
-          if [ "$want" != "$have" ]; then echo "Tag $GITHUB_REF_NAME tidak sama dengan Cargo.toml ($have)"; exit 1; fi
+          tag="v$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Rilis $tag sudah ada, dilewati."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Pasang toolchain
+        if: steps.ver.outputs.skip != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-x86-64 zip
           rustup target add x86_64-pc-windows-gnu
 
       - uses: Swatinem/rust-cache@v2
+        if: steps.ver.outputs.skip != 'true'
 
       - name: Uji
+        if: steps.ver.outputs.skip != 'true'
         run: cargo test --lib
 
       - name: Build
+        if: steps.ver.outputs.skip != 'true'
         run: cargo build --release --target x86_64-pc-windows-gnu
 
       - name: Kemas
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
           mkdir -p dist/Pacu
           cp target/x86_64-pc-windows-gnu/release/pacu.exe dist/Pacu.exe
           cp dist/Pacu.exe dist/Pacu/Pacu.exe
           cp README.md CHANGELOG.md res/PresentMon-LICENSE.txt res/pawnio/LICENSE-PawnIO.Modules.txt res/fonts/FluentSystemIcons-LICENSE.txt dist/Pacu/
           (cd dist && sha256sum Pacu.exe > Pacu.exe.sha256 && zip -qr Pacu.zip Pacu)
-          awk -v v="## $GITHUB_REF_NAME" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > dist/notes.md
+          awk -v v="## $TAG" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > dist/notes.md
           cat dist/Pacu.exe.sha256
 
       - name: Terbitkan rilis
+        if: steps.ver.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/Pacu.exe dist/Pacu.exe.sha256 dist/Pacu.zip --title "Pacu $GITHUB_REF_NAME" --notes-file dist/notes.md
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: gh release create "$TAG" --target "$GITHUB_SHA" dist/Pacu.exe dist/Pacu.exe.sha256 dist/Pacu.zip --title "Pacu $TAG" --notes-file dist/notes.md
