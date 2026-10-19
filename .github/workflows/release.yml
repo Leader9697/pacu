@@ -1,0 +1,50 @@
+name: Rilis
+
+# Dorong tag "vX.Y.Z" (sama dengan version di Cargo.toml) untuk membangun dan merilis Pacu.exe.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cek versi tag sama dengan Cargo.toml
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          if [ "$want" != "$have" ]; then echo "Tag $GITHUB_REF_NAME tidak sama dengan Cargo.toml ($have)"; exit 1; fi
+
+      - name: Pasang toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64 zip
+          rustup target add x86_64-pc-windows-gnu
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Uji
+        run: cargo test --lib
+
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-gnu
+
+      - name: Kemas
+        run: |
+          mkdir -p dist/Pacu
+          cp target/x86_64-pc-windows-gnu/release/pacu.exe dist/Pacu.exe
+          cp dist/Pacu.exe dist/Pacu/Pacu.exe
+          cp README.md CHANGELOG.md res/PresentMon-LICENSE.txt res/pawnio/LICENSE-PawnIO.Modules.txt res/fonts/FluentSystemIcons-LICENSE.txt dist/Pacu/
+          (cd dist && sha256sum Pacu.exe > Pacu.exe.sha256 && zip -qr Pacu.zip Pacu)
+          awk -v v="## $GITHUB_REF_NAME" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > dist/notes.md
+          cat dist/Pacu.exe.sha256
+
+      - name: Terbitkan rilis
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/Pacu.exe dist/Pacu.exe.sha256 dist/Pacu.zip --title "Pacu $GITHUB_REF_NAME" --notes-file dist/notes.md
