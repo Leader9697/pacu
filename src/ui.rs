@@ -1,6 +1,7 @@
 //! Antarmuka Pacu (egui). Ringan: hanya menggambar ulang sekali per detik atau saat ada input,
 //! dan berhenti menggambar saat jendela disembunyikan ke tray.
 
+mod bios_page;
 mod monitor_page;
 mod ram_page;
 mod system_page;
@@ -50,10 +51,11 @@ enum Page {
     Rules,
     Activity,
     Settings,
+    Bios,
 }
 
 impl Page {
-    const ALL: [Page; 11] = [
+    const ALL: [Page; 12] = [
         Page::Home,
         Page::Monitor,
         Page::Game,
@@ -65,6 +67,7 @@ impl Page {
         Page::Rules,
         Page::Activity,
         Page::Settings,
+        Page::Bios,
     ];
 
     fn label(self) -> &'static str {
@@ -80,6 +83,7 @@ impl Page {
             Page::Rules => "Aturan",
             Page::Activity => "Aktivitas",
             Page::Settings => "Pengaturan",
+            Page::Bios => "BIOS & Hardware",
         }
     }
 
@@ -97,6 +101,7 @@ impl Page {
             Page::Rules => icon::RULES,
             Page::Activity => icon::HISTORY,
             Page::Settings => icon::SETTINGS,
+            Page::Bios => icon::BOARD,
         }
     }
 }
@@ -105,7 +110,7 @@ impl Page {
 const NAV: [(&str, &[Page]); 3] = [
     ("", &[Page::Home, Page::Monitor]),
     ("Performa", &[Page::Game, Page::Fps, Page::Volt]),
-    ("Sistem", &[Page::Tweaks, Page::Ram, Page::Processes, Page::Rules]),
+    ("Sistem", &[Page::Tweaks, Page::Bios, Page::Ram, Page::Processes, Page::Rules]),
 ];
 const NAV_FOOTER: [Page; 2] = [Page::Activity, Page::Settings];
 
@@ -173,6 +178,8 @@ pub struct PacuApp {
     updater: crate::update::Updater,
     update_next_check: f64,
     wake_list: Option<Result<Vec<crate::wake::Device>, String>>,
+    bios: Arc<Mutex<Option<crate::bios::Report>>>,
+    bios_scanning: Arc<AtomicBool>,
 }
 
 impl PacuApp {
@@ -231,6 +238,8 @@ impl PacuApp {
             // Pemeriksaan pertama beberapa detik setelah menyala, supaya tidak menunda jendela.
             update_next_check: 5.0,
             wake_list: None,
+            bios: Arc::new(Mutex::new(None)),
+            bios_scanning: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -470,6 +479,7 @@ impl eframe::App for PacuApp {
                     Page::Rules => self.page_rules(ui),
                     Page::Activity => self.page_activity(ui),
                     Page::Settings => self.page_settings(ui),
+                    Page::Bios => self.page_bios(ui),
                     }
                     ui.add_space(24.0);
                 });
