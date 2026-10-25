@@ -1,5 +1,9 @@
 # Catatan rilis
 
+## v0.8.0
+- Halaman baru **BIOS & Hardware**: membaca motherboard, versi BIOS, CPU, dan RAM dari SMBIOS, lalu mengecek apakah XMP/EXPO, Resizable BAR, dan mode UEFI sudah aktif. Setiap rekomendasi menyertakan letak menunya di BIOS ASUS, MSI, Gigabyte, atau ASRock. Pacu hanya membaca; tidak ada yang ditulis ke BIOS.
+- Tombol **Salin laporan** untuk mengirim ringkasan hardware dan BIOS.
+
 ## v0.7.0
 - RAM Ekstrem punya bagian baru **Discord**: Discord dirampingkan tiap 1 menit selama jendelanya tidak dibuka (juga saat bermain, tanpa menyentuh game), diredam selama Mode Game (prioritas rendah, I/O rendah, Efficiency Mode), dan bisa diberi batas keras RAM per proses. Semua dilepas otomatis saat jendela Discord kamu buka supaya chat dan voice tetap lancar.
 - Dari Pacu kamu bisa mematikan akselerasi hardware Discord dan "buka saat Windows menyala". Pacu menutup Discord sebentar, menyimpan cadangan pengaturan, lalu membukanya lagi.

@@ -114,6 +114,13 @@ Power plan "Pacu Performa" juga ikut dari AtlasOS: CPU tidak masuk throttle stat
 
 Defender, Firewall, dan mitigasi CPU tidak disentuh Pacu.
 
+### BIOS & Hardware (baru di v0.8)
+Halaman yang **hanya membaca** dan memberi tahu pengaturan BIOS apa yang perlu kamu ubah sendiri. Pacu tidak pernah menulis ke BIOS atau NVRAM.
+- Membaca tabel SMBIOS (`GetSystemFirmwareTable`): motherboard, versi dan tanggal BIOS, CPU, dan tiap keping RAM (kecepatan yang dipakai, kecepatan maksimal, merek, kode part).
+- Status Resizable BAR dari `nvidia-smi` (jendela BAR1 256 MB = mati, setara VRAM = aktif), mode boot UEFI/Legacy, Secure Boot, dan Memory Integrity.
+- Rekomendasi bertingkat (Penting, Saran, Opsional) dengan letak menu untuk ASUS, MSI, Gigabyte, dan ASRock: XMP/EXPO, RAM single channel, Resizable BAR + Above 4G Decoding, CSM/UEFI (dengan peringatan mbr2gpt), update BIOS, PBO/Curve Optimizer untuk Ryzen, C-states, dan HVCI.
+- **Salin laporan** menyalin ringkasan teks untuk dikirim ke Claude atau forum.
+
 ### RAM Ekstrem (baru)
 Halaman untuk menekan RAM terpakai saat tidak bermain.
 - **Rampingkan sekarang** mengosongkan working set semua proses lalu menulis halaman termodifikasi ke pagefile, sehingga RAM terpakai langsung turun. Hasilnya (sebelum dan sesudah) ditampilkan dan dicatat di Aktivitas.
@@ -201,6 +208,7 @@ Di Linux, `cargo run` menjalankan UI dengan data proses simulasi. `cargo test` m
 - `src/nvprofile.rs` — profil driver NVIDIA per game (NvAPI_DRS)
 - `src/volt/vram.rs` — overclock VRAM otomatis (uji bandwidth D3D11 dan pencarian offset)
 - `src/ui/ram_page.rs` — halaman RAM Ekstrem
+- `src/bios.rs` — pembaca SMBIOS, status ReBAR, dan rekomendasi BIOS (murni, ada unit test); halamannya di `src/ui/bios_page.rs`
 - `src/fps.rs` — pengukur FPS dan benchmark (PresentMon)
 - `src/monitor/` — monitor sensor (`cpu.rs` lewat PDH dan PawnIO), integrasi RTSS (`rtss.rs`), isi overlay (`osd.rs`), dan jendela overlay (`overlay.rs`)
 - `src/volt/` — Pacu Volt: kurva V/F NVAPI, backend AMD ADLX (`gpu/adlx.rs`, model slider di `gpu/amdmodel.rs`), pencarian titik undervolt, pemeriksa error D3D11, dan halamannya (`panel.rs`)
