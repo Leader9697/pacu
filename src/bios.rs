@@ -251,6 +251,8 @@ fn menu_xmp(v: Vendor, amd: bool, ddr5: bool) -> String {
     let prof = if amd && ddr5 { "EXPO" } else { "XMP" };
     match v {
         Vendor::Asus => format!("Ai Tweaker > Ai Overclock Tuner > {prof} I"),
+        // Board MSI untuk AMD menamainya A-XMP (DDR4) atau EXPO (DDR5).
+        Vendor::Msi if amd && !ddr5 => "Tombol A-XMP di bagian atas layar BIOS > Profile 1 (atau OC > A-XMP)".into(),
         Vendor::Msi => format!("OC > Extreme Memory Profile ({prof}) > Profile 1 (atau tombol {prof} di halaman depan)"),
         Vendor::Gigabyte => format!("Tweaker > Extreme Memory Profile ({prof}) > Profile1"),
         Vendor::Asrock => format!("OC Tweaker > DRAM Configuration > Load {prof} Setting > Profile 1"),
@@ -650,6 +652,11 @@ mod tests {
         assert!(tips.iter().any(|a| a.title.contains("Resizable BAR belum aktif")));
         assert!(tips.iter().any(|a| a.title.contains("tahun 2021")));
         assert!(!tips.iter().any(|a| a.title.contains("Precision Boost")));
+        let mut amd = r.clone();
+        amd.smbios.board_maker = "Micro-Star International Co., Ltd.".into();
+        amd.smbios.cpu = "AMD Ryzen 5 5600 6-Core Processor".into();
+        let t = advice(&amd, 2026);
+        assert!(t[0].menu.as_deref().unwrap().contains("A-XMP"));
         let text = report_text(&r, &tips);
         assert!(text.contains("B560M AORUS ELITE"));
     }
